@@ -3,6 +3,7 @@ import createGraph from 'ngraph.graph';
 import {createStreamingSVGParser} from 'streaming-svg-parser';
 import {setProgress} from './bus';
 import {formatNumber} from './utils';
+import {createNSFWSet} from './nsfwFilter';
 
 export default function createSVGLoader(url) {
   let disposed = false;
@@ -43,10 +44,20 @@ export default function createSVGLoader(url) {
       // now the svg file is loaded. Let's load secondary information
       return fetch(getPathTo('node-ids.txt'), {mode: 'cors'}).then(response => response.text()).then(txt => {
         let labels = txt.split('\n');
-        labels.forEach(label => graph.addNode(label));
-        return labels;
+        // Create a set of NSFW subreddits for filtering
+        let nsfwSet = createNSFWSet(labels);
+
+        console.log(`Found ${nsfwSet.size} NSFW subreddits out of ${labels.length} total subreddits`);
+
+        // Only add NSFW subreddits to the graph
+        labels.forEach(label => {
+          if (nsfwSet.has(label)) {
+            graph.addNode(label);
+          }
+        });
+        return {labels, nsfwSet};
       });
-    }).then((labels) => {
+    }).then(({labels, nsfwSet}) => {
       // now load the edges:
       let fromId, fetchReader, prevBuffer, weight;
       return fetch(getPathTo('links.bin'), {mode: 'cors'})
@@ -86,10 +97,16 @@ export default function createSVGLoader(url) {
           if (linkId < 0) {
             fromId = -linkId - 1;
             weight = 1;
-            graph.addNode(labels[fromId]);
+            // Only add node if it's NSFW
+            if (nsfwSet.has(labels[fromId])) {
+              graph.addNode(labels[fromId]);
+            }
           } else {
             let toId = linkId - 1;
-            graph.addLink(labels[fromId], labels[toId], weight)
+            // Only add link if both nodes are NSFW
+            if (nsfwSet.has(labels[fromId]) && nsfwSet.has(labels[toId])) {
+              graph.addLink(labels[fromId], labels[toId], weight);
+            }
             weight += 1;
           }
         }
