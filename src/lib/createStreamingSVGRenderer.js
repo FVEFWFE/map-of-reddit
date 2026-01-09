@@ -16,6 +16,7 @@ import createSceneLayerManager from './createSceneLayerManager';
 import {Colors, LayerLevels, NamedGroups} from './constants';
 import createStreetView from './createStreetView';
 import getComplimentaryColor from './getComplimentaryColor';
+import {isNSFW} from './nsfwFilter';
 
 export default function createStreamingSVGRenderer(canvas) {
   let ignoreSVGViewBox = false;
@@ -387,6 +388,12 @@ export default function createStreamingSVGRenderer(canvas) {
     let r = getNumericAttribute(el, 'r');
     let nodeName = getTextAttribute(el, 'id');
     if (nodeName[0] === '_') nodeName = nodeName.substr(1);
+
+    // Skip non-NSFW subreddits
+    if (!isNSFW(nodeName)) {
+      return;
+    }
+
     if (nodeNameToUI.has(nodeName)) {
       throw new Error('Duplicate node name ' + nodeName);
     }
